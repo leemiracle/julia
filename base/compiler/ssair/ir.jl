@@ -355,6 +355,10 @@ function getindex(compact::IncrementalCompact, idx)
     end
 end
 
+function getindex(view::TypesView, v::OldSSAValue)
+    return view.ir.ir.types[v.id]
+end
+
 function setindex!(compact::IncrementalCompact, v, idx)
     if idx < compact.result_idx
         # Kill count for current uses

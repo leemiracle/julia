@@ -1,3 +1,12 @@
+function compact_exprtype(compact, value)
+    if isa(value, Union{SSAValue, OldSSAValue})
+        return types(compact)[value]
+    elseif isa(value, Argument)
+        return compact.ir.argtypes[value.n]
+    end
+    exprtype(value, compact.ir, compact.ir.mod)
+end
+
 function getfield_elim_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     insertions = Vector{Any}()
@@ -26,7 +35,7 @@ function getfield_elim_pass!(ir::IRCode)
                 possible_predecessors = collect(Iterators.filter(1:length(def.edges)) do n
                     isassigned(def.values, n) || return false
                     value = def.values[n]
-                    edge_typ = value_typ(compact, value)
+                    edge_typ = compact_exprtype(compact, value)
                     return edge_typ ⊑ typeconstraint
                 end)
                 # For now, only look at unique predecessors
@@ -38,6 +47,11 @@ function getfield_elim_pass!(ir::IRCode)
                         push!(phi_locs, (pred, defidx))
                         defidx = val.id
                         def = compact[defidx]
+                    elseif def == val
+                        # This shouldn't really ever happen, but
+                        # patterns like this can occur in dead code,
+                        # so bail out.
+                        break
                     else
                         def = val
                     end
@@ -75,12 +89,14 @@ function getfield_elim_pass!(ir::IRCode)
         # For non-dominating load-store forward, we may have to insert extra phi nodes
         # TODO: Can use the domtree to eliminate unnecessary phis, but ok for now
         forwarded = ir.stmts[idx]
-        forwarded_typ = ir.types[forwarded.id]
-        for (pred, pos) in reverse!(phi_locs)
-            node = PhiNode()
-            push!(node.edges, pred)
-            push!(node.values, forwarded)
-            forwarded = insert_node!(ir, pos, forwarded_typ, node)
+        if isa(forwarded, SSAValue)
+            forwarded_typ = ir.types[forwarded.id]
+            for (pred, pos) in reverse!(phi_locs)
+                node = PhiNode()
+                push!(node.edges, pred)
+                push!(node.values, forwarded)
+                forwarded = insert_node!(ir, pos, forwarded_typ, node)
+            end
         end
         ir.stmts[idx] = forwarded
     end
