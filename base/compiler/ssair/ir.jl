@@ -372,8 +372,8 @@ end
 
 function getindex(view::TypesView, idx)
     isa(idx, SSAValue) && (idx = idx.id)
-    if isa(view.ir, IncrementalCompact) && idx < view.compact.result_idx
-        return view.compact.result_types[idx]
+    if isa(view.ir, IncrementalCompact) && idx < view.ir.result_idx
+        return view.ir.result_types[idx]
     else
         ir = isa(view.ir, IncrementalCompact) ? view.ir.ir : view.ir
         if idx <= length(ir.types)
